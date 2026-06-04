@@ -1,0 +1,129 @@
+{
+  "_comment": "Storage Analyzer config v5 - rules + protected paths",
+  "scan": {
+    "timeout": 30,
+    "max_depth": 4,
+    "min_kb": 51200,
+    "workers": 6
+  },
+  "protected_paths": [
+    "C:\\Windows",
+    "C:\\Windows\\System32",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+    "/bin",
+    "/etc",
+    "/usr",
+    "/System",
+    "/Applications",
+    "/sbin",
+    "/lib",
+    "/lib64",
+    "/boot"
+  ],
+  "classify": {
+    "green": [
+      {
+        "pat": "(?i)\\\\Temp\\\\?",
+        "reason": "Windows temp",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(cache|\\.cache)\\\\",
+        "reason": "Cache dir",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\\\.(npm|gradle|cargo|m2|nuget|docker)\\\\",
+        "reason": "Dev cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(pip|uv|yarn|pnpm|bun)\\\\.*[Cc]ache",
+        "reason": "Package cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)ms-playwright",
+        "reason": "Playwright browser cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(updater|update)\\\\?$",
+        "reason": "Updater residue",
+        "conf": "med"
+      },
+      {
+        "pat": "(?i)\\\\(CrashDumps|DiagOutputDir|sgrepairbackup)",
+        "reason": "Diagnostic/backup",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\WER\\\\Report",
+        "reason": "Error report",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\.log\\.\\d+",
+        "reason": "Rotated log",
+        "conf": "med"
+      }
+    ],
+    "red": [
+      {
+        "pat": "(?i)\\\\Program Files\\\\",
+        "reason": "Installed programs",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\Windows\\\\",
+        "reason": "System files",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\System32(\\\\|$)",
+        "reason": "System core",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\Boot\\\\",
+        "reason": "Boot files",
+        "conf": "hi"
+      }
+    ],
+    "known_apps": {
+      "vmwarekail": [
+        "yellow",
+        "VMware Kali VM"
+      ],
+      "kali": [
+        "yellow",
+        "Kali Linux"
+      ],
+      "ubuntu": [
+        "yellow",
+        "Ubuntu VM"
+      ],
+      "node_modules": [
+        "green",
+        "Node deps cache"
+      ],
+      "steam": [
+        "yellow",
+        "Steam games"
+      ],
+      "docker": [
+        "yellow",
+        "Docker data"
+      ],
+      "wsl": [
+        "yellow",
+        "WSL data"
+      ],
+      "eve-ng": [
+        "yellow",
+        "EVE-NG simulator"
+      ]
+    }
+  }
+}
