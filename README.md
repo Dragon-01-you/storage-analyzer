@@ -166,6 +166,28 @@ python run.py --deep --json -o scan.json
 python run.py --execute -o actions.json
 ```
 
+### Integrations
+
+Storage Analyzer integrates with multiple AI agent platforms:
+
+| Platform | Install | Usage |
+|----------|---------|-------|
+| **Claude Code** | `curl -fsSL .../integrations/metaskill/install.sh \| bash` | `/storage-analyzer [path]` |
+| **Metaskill** | Same as Claude Code | Auto-detected by `/metaskill` |
+| **OpenSquilla** | `curl -fsSL .../integrations/opensquilla/install.sh \| bash` | Ask: "Analyze my disk usage" |
+| **All platforms** | `curl -fsSL .../install-integrations.sh \| bash` | Installs everywhere |
+
+```bash
+# One-liner: install for all AI platforms
+curl -fsSL https://raw.githubusercontent.com/Dragon-01-you/storage-analyzer/main/install-integrations.sh | bash
+
+# Or pick specific platform:
+curl -fsSL https://raw.githubusercontent.com/Dragon-01-you/storage-analyzer/main/integrations/metaskill/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Dragon-01-you/storage-analyzer/main/integrations/opensquilla/install.sh | bash
+```
+
+See [`integrations/`](integrations/) for platform-specific SKILL.md files and documentation.
+
 ---
 
 ## For developers / contributors
@@ -185,13 +207,17 @@ TL;DR:
 storage-analyzer/
 ├── engine/                # Core engine (importable, no side effects)
 ├── cleaners/              # Plugin pipeline (default since v7.1)
+├── v8/                    # Next-gen modules (types, safeguard, audit, ...)
 ├── scripts/               # CLI helpers (snapshot, drill, compare, ...)
-├── tests/                 # pytest suite (44 tests)
+├── tests/                 # pytest suite (75 tests)
 ├── assets/                # HTML report templates
+├── integrations/          # AI platform integrations
+│   ├── metaskill/         #   Claude Code / Metaskill SKILL.md
+│   └── opensquilla/       #   OpenSquilla SKILL.md + entrypoint
 ├── __main__.py            # zipapp entry
 ├── run.py                 # dev entry (import engine package)
 ├── config.json            # rules + protected paths
-├── SKILL.md               # AI agent handbook
+├── SKILL.md               # AI agent handbook (universal)
 ├── DEVELOPING.md          # Contributor guide
 ├── pyproject.toml         # PEP 517 build + entry points
 └── storage-analyzer.pyz   # Single-file bundle (built)
