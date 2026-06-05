@@ -192,6 +192,15 @@ python run.py --execute
 
 ---
 
+## 参考链接
+
+- [Anthropic Skill Spec](https://docs.anthropic.com/claude-code/skills) — SKILL.md 规范
+- [Pydantic v2 文档](https://docs.pydantic.dev/latest/) — 数据契约库
+- [psutil 文档](https://psutil.readthedocs.io/) — 系统/进程工具（可选依赖）
+- [Python pathlib](https://docs.python.org/3/library/pathlib.html) — 跨平台路径处理
+
+---
+
 ## Python API（用于深度集成）
 
 ```python
@@ -371,6 +380,7 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 ### ❌ 反模式 1：跳过用户确认
 ```
 ❌ 错误：直接执行 python run.py --execute
+   → 为什么错：跳过确认可能删除用户需要的文件，违反核心安全原则
 ✅ 正确：
   1. 先扫描：python run.py --deep --json > scan.json
   2. 展示结果给用户
@@ -381,6 +391,7 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 ### ❌ 反模式 2：展示技术路径
 ```
 ❌ 错误："删除 C:\Users\user\AppData\Local\Temp 吗？"
+   → 为什么错：技术路径对用户无意义，增加认知负担，用户可能因看不懂而盲目同意
 ✅ 正确："删除 Windows 临时文件（2.3GB）？"
 ```
 
@@ -397,6 +408,7 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 ### ❌ 反模式 4：误报清理完成
 ```
 ❌ 错误：在 dry-run 模式下说"已清理 28GB"
+   → 为什么错：用户以为已清理，实际没删，造成信任危机
 ✅ 正确："扫描完成，发现可清理 28GB。执行 --execute 才会真正删除。"
 ```
 
@@ -426,6 +438,7 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 ### ❌ 反模式 8：包含小文件噪音
 ```
 ❌ 错误：扫描结果包含 < min_size_mb 的文件
+   → 为什么错：小文件数量巨大但释放空间极小，噪音淹没真正的大文件
 ✅ 正确：设置 min_size_mb 过滤小文件
 ```
 
