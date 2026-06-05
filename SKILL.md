@@ -36,7 +36,7 @@ Storage Analyzer 路径: !`for d in "$(dirname "$0")" "." "$HOME/.claude/skills/
 
 ```bash
 # 分析（不删除，只报告）
-python run.py --deep --json -o scan.json
+python run.py --deep --json
 
 # 执行删除（需要用户确认）
 python run.py --deep --execute
@@ -46,6 +46,15 @@ python run.py --dupes
 
 # 生成 HTML 报告
 python run.py --deep --report
+
+# 保存 JSON 到文件（用 shell 重定向）
+python run.py --deep --json > scan.json
+
+# 静默模式（不输出日志）
+python run.py --deep --json --quiet
+
+# 跳过缓存（强制全量扫描）
+python run.py --deep --json --no-cache
 ```
 
 ---
@@ -53,10 +62,10 @@ python run.py --deep --report
 ## AI 工作流程（必须按顺序执行）
 
 ```
-Step 1: 扫描      → python run.py --deep --json -o scan.json
+Step 1: 扫描      → python run.py --deep --json > scan.json
 Step 2: 展示      → 把 scan.json 中的 actions[] 展示给用户（用大白话，不用技术路径）
-Step 3: 等待确认  → 用户逐项确认 approve / skip / whitelist，输出记录到 actions.json
-Step 4: 执行      → python run.py --execute -o actions.json（仅执行用户确认的项）
+Step 3: 等待确认  → 用户逐项确认 approve / skip / whitelist
+Step 4: 执行      → python run.py --execute（仅执行用户确认的项）
 Step 5: 汇报      → 展示清理结果和释放空间
 ```
 
@@ -64,8 +73,11 @@ Step 5: 汇报      → 展示清理结果和释放空间
 - 扫描失败（ok=false）→ 展示错误信息，建议检查路径或权限
 - 用户跳过所有项 → 记录跳过，不执行删除，提示"下次再来看看"
 - 用户全部确认 → 二次确认总大小后执行
+- 用户部分确认 → 仅执行 approve 的项，跳过的项记录到下次扫描
 - 删除部分失败 → 汇报成功/失败数量，展示审计日志位置
+- JSON 解析失败 → 展示原始 stderr，建议重试或缩小扫描范围
 - 用户说"帮我清理"（模糊指令）→ 先扫描，只自动 approve `risk=none` 的 SAFE 项，其他项仍需确认
+- 用户说"只清理 XX" → 扫描后只展示匹配项，其他项自动 skip
 
 ---
 
@@ -73,10 +85,10 @@ Step 5: 汇报      → 展示清理结果和释放空间
 
 ```bash
 cd /path/to/storage-analyzer
-python run.py --deep --json -o scan.json
+python run.py --deep --json > scan.json
 ```
 
-输出 JSON 结构：
+输出 JSON 结构（stdout）：
 
 ```json
 {
@@ -128,9 +140,12 @@ python run.py --deep --json -o scan.json
 ### Step 3: 等待用户确认
 
 **绝对不要跳过这一步。** 用户可以选择：
-- **approve** — 确认删除
+- **approve** — 确认删除（可逐项或批量）
 - **skip** — 跳过（跳过 3 次后建议加入白名单）
 - **whitelist** — 永久不再提示
+- **approve all safe** — 批量确认所有 `risk=none` 项，其他项逐项确认
+
+**部分确认流程**：用户可以只 approve 部分项。跳过的项不会被执行，下次扫描会重新出现。建议在用户连续 skip 同一项 3 次后提示加入白名单。
 
 🛑 **CHECKPOINT: 确认前**
 - IF 总大小 > 10GB THEN 额外警告："将删除 XX GB 数据，此操作不可逆"
@@ -141,11 +156,15 @@ python run.py --deep --json -o scan.json
 
 ### Step 4: 执行删除
 
-只有用户确认的项才会被删除。
+只有用户确认的项才会被删除。`--execute` 模式下，引擎会自动跳过未确认的项。
 
 ```bash
-python run.py --execute -o actions.json
+python run.py --execute
 ```
+
+**用户决策传递机制**：
+- 使用 Python API 时：通过 `Orchestrator.run(cfg, user_decision=lambda e: "approve"/"skip")` 回调函数传递
+- 使用 CLI 时：`--execute` 模式下，引擎根据 risk 级别自动路由（SAFE 项自动删除，REVIEW/HIGH 项需二次确认）
 
 🛑 **CHECKPOINT: 执行前**
 - 展示将删除的项目列表和总大小
@@ -185,7 +204,12 @@ cfg = ScanConfig(
     deletion_mode=DeletionMode.DRY_RUN,  # 默认 dry-run
     min_size_mb=50,
 )
-result = orch.run(cfg, user_decision=lambda e: "approve" if e.risk_level == RiskLevel.NONE else "skip")
+result = orch.run(
+    cfg,
+    user_decision=lambda e: "approve" if e.risk_level == RiskLevel.NONE else "skip",
+    use_cache=True,        # 使用增量缓存
+    record_history=True,   # 记录历史快照
+)
 print(result.summary())
 
 # 方式 2：分步控制
@@ -216,6 +240,28 @@ except Exception as e:
 
 ---
 
+## CLI 完整参考
+
+```text
+python run.py [options]
+
+Options:
+  --execute         Actually delete files (default: dry-run)
+  --quiet           Suppress stderr logs
+  --deep            Include system scan
+  --dupes           Find duplicate files (>= 50MB)
+  --full            --deep + --dupes
+  --include-vm      Surface VMware / VM items in the deep scan
+  --legacy-scanner  Use the legacy hand-coded scan_sys() instead of the plugin pipeline
+  --no-cache        Skip incremental cache
+  --json            Print JSON to stdout (default)
+  --report          Generate HTML report + open in browser
+```
+
+**注意：没有 `-o` 参数。** 保存到文件请用 shell 重定向：`python run.py --deep --json > scan.json`
+
+---
+
 ## 安全机制（5 层防线）
 
 ### 第 1 层：Dry-run 默认
@@ -232,7 +278,7 @@ except Exception as e:
 |------|-----------|
 | Windows | C:\Windows, C:\Windows\System32, C:\Program Files, C:\Program Files (x86), C:\Boot, C:\EFI |
 | macOS | /System, /Applications, /usr, /bin, /sbin |
-| Linux | /, /bin, /sbin, /etc, /boot, /lib, /usr, /var |
+| Linux | /, /bin, /sbin, /etc, /boot, /lib, /lib64, /usr, /var |
 
 **检查方式**：`os.path.realpath()` 解析符号链接 + 大小写归一化（Windows）
 
@@ -242,7 +288,7 @@ except Exception as e:
 |------|------|------|
 | 文件 < 100MB | 回收站 | 可恢复 |
 | 文件 ≥ 100MB | 隔离区 | 30 天后自动清理 |
-| HIGH 风险 | 彻底删除 | 需要显式同意 + 审计日志 |
+| HIGH 风险 | WIPE | 需要 `DeletionMode.HARD` + 显式同意 + 审计日志。`SOFT` 模式下拒绝执行 |
 
 ### 第 4 层：审计日志链
 
@@ -275,7 +321,7 @@ AI Brain 用三层机制给每个目录打标签：
 
 ---
 
-## 指纹规则覆盖（40+ 条）
+## 指纹规则覆盖（60 条）
 
 ### 安全删除（RiskLevel.NONE）
 npm-cache, pip-cache, cargo-registry, gradle-caches, maven-repo, nuget-packages, playwright, yarn-cache, pnpm-store, bun-cache, uv-cache, __pycache__, .next, Chrome/Edge/Brave Cache, CrashDumps, Windows Temp, WER Report, Discord Cache, Slack Cache, Steam shader/html cache, OneDrive Cache
@@ -285,6 +331,8 @@ JetBrains/VS/Android Studio 缓存, node_modules, Rust 构建产物, Windows 更
 
 ### 必须询问用户（RiskLevel.HIGH）
 Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数据, VMware 虚拟机, WSL 磁盘, Docker 数据, Steam/Epic 游戏, OneDrive 同步数据
+
+完整规则定义：`v8/ai_brain.py` 的 `_FINGERPRINTS` 列表（60 条）
 
 ---
 
@@ -323,7 +371,7 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 ```
 ❌ 错误：直接执行 python run.py --execute
 ✅ 正确：
-  1. 先扫描：python run.py --deep --json -o scan.json
+  1. 先扫描：python run.py --deep --json > scan.json
   2. 展示结果给用户
   3. 等待用户逐项确认
   4. 再执行：python run.py --execute
@@ -371,7 +419,7 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 ### ❌ 反模式 8：包含小文件噪音
 ```
 ❌ 错误：扫描结果包含 < min_size_mb 的文件
-✅ 正确：设置 min_size_mb=50 过滤小文件
+✅ 正确：设置 min_size_mb 过滤小文件
 ```
 
 ---
@@ -380,13 +428,13 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 
 | 编号 | 问题 | 影响 | 状态 |
 |------|------|------|------|
-| T1 | `safe_cleanup.py` 绕过 v8 安全层 | 可能误删受保护文件 | ✅ 已修复 |
-| T2 | `safety_guard.py` 与 `safeguard.py` 职责重叠 | 维护成本高 | ⚠️ 待合并 |
+| T1 | `safe_cleanup.py` 绕过 v8 安全层 | 可能误删受保护文件 | ✅ 已修复，接入 SafeDeleter |
+| T2 | `safety_guard.py` 与 `safeguard.py` 职责重叠 | 维护成本高 | ⚠️ 待合并（风险已降低，safe_cleanup.py 已接入 SafeDeleter） |
 | T3 | `memory_optimizer.py` 直接改注册表 | 无法回滚 | ✅ 已加 dry_run |
-| T4 | `_human_bytes` 函数重复 4 次 | 维护成本 | ⚠️ 待提取 |
-| T5 | 裸 `except:` 吞错误 | 隐藏 bug | ✅ 已全部替换 |
-| T6 | 缺少删除逻辑测试 | 回归风险 | ✅ 已补 29 个测试 |
-| T7 | CleanupReporter 百分比计算用近似值 | 报告不准 | ✅ 已修复 |
+| T4 | `_human_bytes` 函数重复 4 次 | 维护成本 | ⚠️ 待提取（types.py + evolution.py + audit.py + orchestrator.py） |
+| T5 | 裸 `except:` 吞错误 | 隐藏 bug | ✅ 已全部替换为具体异常类型 |
+| T6 | 缺少删除逻辑测试 | 回归风险 | ✅ 已补删除逻辑测试 |
+| T7 | CleanupReporter 百分比计算用近似值 | 报告不准 | ✅ 已修复，支持 total_bytes 参数 |
 
 ---
 
@@ -414,8 +462,10 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
   },
   "protected_paths": [
     "C:\\Windows",
+    "C:\\Windows\\System32",
     "C:\\Program Files",
-    "/bin", "/etc", "/usr"
+    "C:\\Program Files (x86)",
+    "/bin", "/sbin", "/etc", "/usr", "/System", "/Applications", "/lib", "/lib64", "/boot"
   ],
   "classify": {
     "green": [{"pat": "(?i)\\\\Temp\\\\?", "reason": "Windows temp", "conf": "hi"}],
@@ -430,7 +480,7 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 ## 测试
 
 ```bash
-# 运行 v8 测试套件（75 个用例，73 通过，2 跳过）
+# 运行 v8 测试套件（75 个用例，73-74 通过，1-2 跳过取决于权限）
 python -m pytest tests/test_v8.py -v
 
 # 运行全部测试
@@ -439,7 +489,7 @@ python -m pytest tests/ -v
 
 测试覆盖：types, ai_brain, safeguard, evolution, platform_paths, scan_cache, audit, duplicates, history, orchestrator, scanner_v3, cleanup_engine, memory_optimizer, performance_optimizer, iterative_scanner
 
-**跳过的 2 个测试**：POSIX 路径测试（Windows 不适用）、符号链接测试（需管理员权限）
+**跳过的测试**：POSIX 路径测试（Windows 不适用）、符号链接测试（需管理员权限）
 
 **未覆盖**：DISM 集成、回收站 SHFileOperation（需 Windows API mock）
 
@@ -452,33 +502,68 @@ storage-analyzer/
 ├── v8/                          # 核心模块（19 个文件）
 │   ├── __init__.py              # 模块导出
 │   ├── types.py                 # Pydantic v2 数据契约
-│   ├── ai_brain.py              # AI 意图解析 + 3 层认知标签
+│   ├── ai_brain.py              # AI 意图解析 + 3 层认知标签（60 条指纹规则）
 │   ├── engine_core.py           # 漏斗扫描器 + 插件注册
 │   ├── evolution.py             # 防呆提案 + 白名单健康检查
-│   ├── safeguard.py             # 安全删除（5 层防线的核心）
+│   ├── safeguard.py             # 安全删除（ProtectedPaths + SafeDeleter）
 │   ├── orchestrator.py          # 全模块编排
 │   ├── platform_paths.py        # 跨平台路径解析
 │   ├── scan_cache.py            # SQLite 增量缓存
-│   ├── audit.py                 # JSON Lines 审计日志链
-│   ├── duplicates.py            # 3 阶段重复检测
+│   ├── audit.py                 # JSON Lines 审计日志链（SHA-256）
+│   ├── duplicates.py            # 3 阶段重复检测（size→hash→content）
 │   ├── history.py               # 历史趋势 + 线性回归预测
-│   ├── scanner_v3.py            # 深度扫描
+│   ├── scanner_v3.py            # 深度扫描（插件管线）
 │   ├── iterative_scanner.py     # 迭代扫描
 │   ├── memory_optimizer.py      # 内存优化（dry_run 默认，logging）
 │   ├── performance_optimizer.py # 性能优化（dry_run 默认，logging）
-│   ├── safety_guard.py          # 安全机制（与 safeguard.py 重叠）
+│   ├── safety_guard.py          # 安全机制（与 safeguard.py 重叠，待合并）
 │   ├── safe_cleanup.py          # 安全清理（已接入 SafeDeleter）
-│   └── cleanup_reporter.py      # 清理报告生成
-├── integrations/                # AI 平台集成
-│   ├── metaskill/               #   Claude Code / Metaskill
-│   └── opensquilla/             #   OpenSquilla（子进程模式）
+│   ├── cleanup_reporter.py      # 清理报告生成
+│   └── ISSUES.md                # 模块级问题追踪
+├── engine/                      # 旧版引擎（run.py 实际导入）
+│   ├── __init__.py              # 包初始化
+│   ├── main.py                  # CLI 入口（run.py 调用）
+│   ├── scanner.py               # 扫描器
+│   ├── scanner_v2.py            # v2 扫描器
+│   ├── deleter.py               # 删除器
+│   ├── forecaster.py            # 预测器
+│   ├── utils.py                 # 工具函数
+│   └── classify/                # 分类子系统
+├── cleaners/                    # 插件清理器（10 个模块）
+│   ├── __init__.py              # 清理器注册表
+│   ├── _base.py                 # 基类
+│   ├── _system.py               # 系统清理器（Temp/CBS/WinSxS/Prefetch）
+│   ├── _browsers.py             # 浏览器清理器（Chrome/Edge/Firefox/Brave）
+│   ├── _dev.py                  # 开发工具清理器（npm/pip/cargo/gradle）
+│   ├── _ide.py                  # IDE 清理器（VSCode/JetBrains）
+│   ├── _cloud_chat.py           # 云+聊天清理器（OneDrive/Teams/WeChat）
+│   ├── _extras.py               # 附加清理器
+│   ├── _vmware.py               # VMware 清理器（advisory）
+│   └── _legacy_adapter.py       # 旧版适配器
+├── scripts/                     # 工具脚本（20+）
+│   ├── build_report.py          # 报告生成
+│   ├── compare.py               # 扫描器对比
+│   ├── server.py                # HTTP 服务器
+│   ├── build_zipapp.py          # .pyz 打包
+│   ├── snapshot.py              # 快照工具
+│   └── test.py                  # 旧版测试
 ├── tests/
-│   └── test_v8.py               # 75 个测试用例
+│   ├── test_v8.py               # v8 测试套件（75 个用例）
+│   └── test_cleaners.py         # 清理器测试
+├── dist/                        # 分发包
+│   ├── storage-analyzer-v8.1.0.pyz
+│   ├── storage-analyzer-v8.1.0.zip
+│   └── storage_analyzer-8.1.0-py3-none-any.whl
+├── assets/                      # HTML 报告模板
 ├── config.json                  # 规则 + 受保护路径
-├── run.py                       # CLI 入口
+├── __main__.py                  # python -m storage-analyzer 入口
+├── run.py                       # CLI 入口（调用 engine.main.run）
+├── pyproject.toml               # PEP 517 构建配置
 ├── SKILL.md                     # 本文件（AI Agent 可执行手册）
 ├── README.md                    # 项目说明
+├── DEVELOPING.md                # 开发者指南
 ├── ARCHITECTURE.md              # 架构设计文档
+├── install.py                   # 一键安装脚本
 └── storage-analyzer.pyz         # 单文件分发包
 ```
 
@@ -488,7 +573,7 @@ storage-analyzer/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 8.1.0 | 2026-06-04 | 当前版本：Pydantic v2 契约，40+ 指纹规则，审计链，Metaskill/OpenSquilla 集成 |
+| 8.1.0 | 2026-06-04 | 当前版本：Pydantic v2 契约，56 条指纹规则，审计链，安全层统一 |
 | 7.1 | — | 插件管线，默认启用 |
 | 6 | — | 修复 --execute 非功能性 bug |
 | 5 | — | 初始版本 |
