@@ -1,11 +1,16 @@
 ---
 name: storage-analyzer
-description: 工业级磁盘存储分析与安全清理工具，跨平台（Windows/macOS/Linux），零外部依赖
+description: "磁盘存储分析与安全清理工具。当用户提到磁盘空间不足、C盘满了、清理缓存、找大文件、删除重复文件、释放空间、磁盘清理、存储分析时触发。跨平台（Windows/macOS/Linux），零外部依赖。"
 version: 8.1.0
 license: MIT
 language: Python 3.10+
 dependencies: pydantic>=2.0, psutil (optional)
 platforms: [windows, macos, linux]
+user-invocable: true
+disable-model-invocation: false
+context: fork
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+argument-hint: "[path] [--deep] [--dupes] [--report] [--execute]"
 ---
 
 # Storage Analyzer Skill
@@ -17,6 +22,13 @@ platforms: [windows, macos, linux]
 一个本地磁盘分析+安全清理工具。扫描磁盘→分类文件→用户确认→安全删除。
 
 **核心原则：默认不删任何东西。必须用户确认。**
+
+## 自动检测上下文
+
+工作目录: !`pwd`
+Python 版本: !`python --version 2>/dev/null || python3 --version 2>/dev/null || echo "Python not found"`
+平台: !`uname -s 2>/dev/null || echo Windows`
+Storage Analyzer 路径: !`for d in "$(dirname "$0")" "." "$HOME/.claude/skills/storage-analyzer"; do [ -f "$d/run.py" ] && echo "$d" && break; done 2>/dev/null || echo "NOT FOUND"`
 
 ---
 
@@ -42,9 +54,9 @@ python run.py --deep --report
 
 ```
 Step 1: 扫描      → python run.py --deep --json -o scan.json
-Step 2: 展示      → 把 scan.json 中的 actions[] 展示给用户
-Step 3: 等待确认  → 用户逐项确认 approve / skip / whitelist
-Step 4: 执行      → python run.py --execute（仅执行用户确认的项）
+Step 2: 展示      → 把 scan.json 中的 actions[] 展示给用户（用大白话，不用技术路径）
+Step 3: 等待确认  → 用户逐项确认 approve / skip / whitelist，输出记录到 actions.json
+Step 4: 执行      → python run.py --execute -o actions.json（仅执行用户确认的项）
 Step 5: 汇报      → 展示清理结果和释放空间
 ```
 
@@ -53,6 +65,9 @@ Step 5: 汇报      → 展示清理结果和释放空间
 - 用户跳过所有项 → 记录跳过，不执行删除，提示"下次再来看看"
 - 用户全部确认 → 二次确认总大小后执行
 - 删除部分失败 → 汇报成功/失败数量，展示审计日志位置
+- 用户说"帮我清理"（模糊指令）→ 先扫描，只自动 approve `risk=none` 的 SAFE 项，其他项仍需确认
+
+---
 
 ### Step 1: 扫描
 
@@ -82,6 +97,10 @@ python run.py --deep --json -o scan.json
 }
 ```
 
+**如果 ok=false**：读 stderr，展示错误，建议用户检查路径或权限，终止流程。
+
+---
+
 ### Step 2: 展示给用户
 
 **用大白话展示，不要展示技术路径。**
@@ -104,12 +123,21 @@ python run.py --deep --json -o scan.json
   7. Docker 桌面数据 — 8GB（容器和镜像会丢失）
 ```
 
+---
+
 ### Step 3: 等待用户确认
 
 **绝对不要跳过这一步。** 用户可以选择：
 - **approve** — 确认删除
 - **skip** — 跳过（跳过 3 次后建议加入白名单）
 - **whitelist** — 永久不再提示
+
+🛑 **CHECKPOINT: 确认前**
+- IF 总大小 > 10GB THEN 额外警告："将删除 XX GB 数据，此操作不可逆"
+- IF 包含 HIGH 风险项（`risk: "high"`）THEN 用红色警告并等待确认
+- IF 用户犹豫 THEN 提示可以先只清理 SAFE 项（`risk: "none"`）
+
+---
 
 ### Step 4: 执行删除
 
@@ -119,6 +147,14 @@ python run.py --deep --json -o scan.json
 python run.py --execute -o actions.json
 ```
 
+🛑 **CHECKPOINT: 执行前**
+- 展示将删除的项目列表和总大小
+- 要求用户最终确认："确认删除这 X 项？(y/n)"
+- IF 包含 REVIEW 项 THEN 逐项等待用户确认
+- IF 用户拒绝 THEN 终止，不执行任何删除
+
+---
+
 ### Step 5: 汇报结果
 
 ```
@@ -126,14 +162,20 @@ python run.py --execute -o actions.json
   ✅ 已清理 12 项，释放 28.5GB
   ⏭️ 跳过 3 项
   🔒 保护 2 项
+  📋 审计日志: ~/.cache/storage-analyzer/audit.jsonl
 ```
+
+🛑 **CHECKPOINT: 执行后**
+- IF 有失败项 THEN 展示失败原因和失败路径
+- 提示审计日志位置：`~/.cache/storage-analyzer/audit.jsonl`
+- IF 磁盘使用率仍 > 90% THEN 建议重启后再检查
 
 ---
 
 ## Python API（用于深度集成）
 
 ```python
-from v8 import AIBrain, FunnelScanner, Orchestrator, ScanConfig
+from v8 import AIBrain, FunnelScanner, Orchestrator, ScanConfig, DeletionMode, RiskLevel
 from pathlib import Path
 
 # 方式 1：用 Orchestrator（推荐，全流程编排）
@@ -148,8 +190,8 @@ print(result.summary())
 
 # 方式 2：分步控制
 brain = AIBrain()
-cfg = brain.parse_intent("清理C盘，保留原神")
-scanner = FunnelScanner(cfg)
+intent = brain.parse_intent("清理C盘，保留原神")  # 返回 ScanConfig
+scanner = FunnelScanner(intent)
 summaries = scanner.scan()
 entries = brain.label_all(summaries)
 
@@ -160,7 +202,9 @@ for entry in entries:
 
 # 方式 3：带错误处理
 try:
+    brain = AIBrain()
     cfg = brain.parse_intent("清理C盘")
+    scanner = FunnelScanner(cfg)
     summaries = scanner.scan()
 except FileNotFoundError as e:
     print(f"路径不存在: {e}")
@@ -246,51 +290,89 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 
 ## 失败模式与回退
 
-| 场景 | 症状 | 回退方案 |
-|------|------|----------|
-| 路径不存在 | OSError / FileNotFoundError | 跳过该路径，记录警告 |
-| 权限不足 | PermissionError | 跳过，提示用户用管理员权限重试 |
-| 文件被锁定 | WinError 32 | 记录为"被占用"，建议重启后重试 |
-| 磁盘已满 | 无法写入审计日志 | 输出到 stderr，不中断流程 |
-| Pydantic 版本不兼容 | ImportError / ValidationError | 提示 `pip install pydantic>=2.0` |
-| psutil 未安装 | ImportError（仅 memory_optimizer） | 跳过内存优化功能 |
-| 扫描超时 | 默认 30 秒 | 调整 config.json 的 scan.timeout |
-| DISM 失败 | WinSxS 清理报错 | 跳过，提示手动运行 DISM |
-| JSON 输出异常 | ok=false 或格式错误 | 展示原始 stderr，建议重试 |
-| 并发扫描冲突 | SQLite 锁定 | 等待 2 秒后重试，最多 3 次 |
-
----
-
-## 检查点（STOP 标记）
-
-### 🛑 CHECKPOINT 1: 扫描前确认
-- 确认用户知道要扫描哪个磁盘
-- 如果用户说"清理C盘"，确认 C:\ 是目标
-- 如果磁盘使用率 < 50%，提示"磁盘空间充足，是否继续？"
-
-### 🛑 CHECKPOINT 2: 删除前确认
-- 展示将删除的项目列表和总大小
-- 如果总大小 > 10GB，额外警告
-- 如果包含 REVIEW 项，逐项等待用户确认
-- 如果包含 HIGH 风险项，用红色警告并等待确认
-
-### 🛑 CHECKPOINT 3: 执行后汇报
-- 展示实际释放空间
-- 展示失败项（如果有）
-- 提示审计日志位置
+| 场景 | 症状 | 第一修复 | 仍失败则 |
+|------|------|----------|----------|
+| 路径不存在 | OSError / FileNotFoundError | 跳过该路径，记录警告 | 提示用户检查路径拼写 |
+| 权限不足 | PermissionError | 跳过，提示用管理员权限 | 提示关闭占用进程后重试 |
+| 文件被锁定 | WinError 32 | 记录为"被占用" | 建议重启后重试 |
+| 磁盘已满 | 无法写入审计日志 | 输出到 stderr | 不中断流程，继续清理 |
+| Pydantic 版本不兼容 | ImportError / ValidationError | `pip install pydantic>=2.0` | 提示升级 Python 到 3.10+ |
+| psutil 未安装 | ImportError（仅 memory_optimizer） | 跳过内存优化功能 | 安装：`pip install psutil` |
+| 扫描超时 | 默认 30 秒 | 调整 config.json 的 scan.timeout | 缩小扫描范围（减少 --depth） |
+| DISM 失败 | WinSxS 清理报错 | 跳过 | 提示手动运行 DISM /StartComponentCleanup |
+| JSON 输出异常 | ok=false 或格式错误 | 展示原始 stderr | 建议重试或报告 issue |
+| 并发扫描冲突 | SQLite 锁定 | 等待 2 秒后重试，最多 3 次 | 提示关闭其他扫描实例 |
+| 非 Windows 平台 | macOS/Linux 功能受限 | 跳过 Windows 专用清理器 | 仅执行跨平台清理器（browsers/dev） |
 
 ---
 
 ## 反模式（不要做的事）
 
-1. **不要跳过用户确认直接删除** — 即使是 "安全删除" 项，也要展示给用户
-2. **不要向用户展示技术路径** — 用 `human_readable_label`，不用 `technical_path`
-3. **不要用 `SafeCleanup.delete_approved_items()`** — 它绕过 v8 安全层，用 `SafeDeleter.delete_entry()` 代替
-4. **不要在没有 `--execute` 的情况下告诉用户"已清理"** — 默认是 dry-run
-5. **不要调用 `MemoryOptimizer.optimize_windows_settings()`** — 它直接改注册表
-6. **不要调用 `PerformanceOptimizer._stop_app()`** — `taskkill /f` 会强杀进程
-7. **不要信任 `safety_guard.py` 的字符串匹配** — 用 `safeguard.py` 的 `ProtectedPaths` 代替
-8. **不要在扫描结果中包含 < min_size_mb 的文件** — 会产生噪音
+| # | 错误做法 | 正确做法 |
+|---|----------|----------|
+| 1 | 直接执行 --execute | 先扫描 → 展示 → 确认 → 再执行 |
+| 2 | 展示技术路径 | 用中文标签（"Windows 临时文件"） |
+| 3 | safe_cleanup.delete_approved_items | SafeDeleter().delete_entry() |
+| 4 | dry-run 说"已清理" | 说"发现可清理 XX GB" |
+| 5 | 直接改注册表 | 传 dry_run=True |
+| 6 | taskkill /f 强杀 | 提示用户手动关闭 |
+| 7 | safety_guard 字符串匹配 | ProtectedPaths.is_protected() |
+| 8 | 包含小文件噪音 | 设置 min_size_mb 过滤 |
+
+### ❌ 反模式 1：跳过用户确认
+```
+❌ 错误：直接执行 python run.py --execute
+✅ 正确：
+  1. 先扫描：python run.py --deep --json -o scan.json
+  2. 展示结果给用户
+  3. 等待用户逐项确认
+  4. 再执行：python run.py --execute
+```
+
+### ❌ 反模式 2：展示技术路径
+```
+❌ 错误："删除 C:\Users\user\AppData\Local\Temp 吗？"
+✅ 正确："删除 Windows 临时文件（2.3GB）？"
+```
+
+### ❌ 反模式 3：绕过安全层
+```
+❌ 错误：safe_cleanup.delete_approved_items(items)  # 绕过 v8 安全层
+✅ 正确：from v8.safeguard import SafeDeleter
+         deleter = SafeDeleter()
+         deleter.delete_entry(entry, DeletionMode.DRY_RUN)
+```
+
+### ❌ 反模式 4：误报清理完成
+```
+❌ 错误：在 dry-run 模式下说"已清理 28GB"
+✅ 正确："扫描完成，发现可清理 28GB。执行 --execute 才会真正删除。"
+```
+
+### ❌ 反模式 5：直接改注册表
+```
+❌ 错误：MemoryOptimizer.optimize_windows_settings()  # 直接改注册表，无法回滚
+✅ 正确：传 dry_run=True，让用户确认后再执行
+```
+
+### ❌ 反模式 6：强杀进程
+```
+❌ 错误：PerformanceOptimizer._stop_app("chrome.exe")  # taskkill /f
+✅ 正确：提示用户手动关闭应用
+```
+
+### ❌ 反模式 7：信任字符串匹配
+```
+❌ 错误：safety_guard.is_protected(path)  # 字符串匹配不可靠
+✅ 正确：from v8.safeguard import ProtectedPaths
+         ProtectedPaths().is_protected(path)  # realpath + 大小写归一化
+```
+
+### ❌ 反模式 8：包含小文件噪音
+```
+❌ 错误：扫描结果包含 < min_size_mb 的文件
+✅ 正确：设置 min_size_mb=50 过滤小文件
+```
 
 ---
 
@@ -308,38 +390,40 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 
 ---
 
+## 跨平台支持
+
+| 平台 | 状态 | 退化策略 |
+|------|------|----------|
+| Windows 10/11 | ✅ 完整 | 所有功能可用 |
+| macOS | ⚠️ 部分 | 跳过 Windows 专用清理器（WinSxS/CBS/Prefetch），仅执行浏览器+开发工具清理 |
+| Linux | ⚠️ 部分 | 跳过 Windows 专用清理器，仅执行浏览器+开发工具清理 |
+
+**AI 遇到非 Windows 平台时**：先运行扫描（`python run.py --deep --json`），如果 actions 为空或只有少量项，提示用户"当前平台功能有限，仅支持浏览器缓存和开发工具清理"。
+
+---
+
 ## 配置文件（config.json）
 
 ```json
 {
   "scan": {
-    "timeout": 30,        // 扫描超时（秒）
-    "max_depth": 4,       // 最大递归深度
-    "min_kb": 51200,      // 最小文件大小（KB），低于此值忽略
-    "workers": 6          // 预留的并发数（当前未使用）
+    "timeout": 30,
+    "max_depth": 4,
+    "min_kb": 51200,
+    "workers": 6
   },
-  "protected_paths": [    // 额外保护路径（除了硬编码的）
+  "protected_paths": [
     "C:\\Windows",
     "C:\\Program Files",
     "/bin", "/etc", "/usr"
   ],
   "classify": {
-    "green": [...],       // 可安全删除的路径模式（正则）
-    "red": [...],         // 绝对不能删除的路径模式
-    "known_apps": {...}   // 已知应用分类
+    "green": [{"pat": "(?i)\\\\Temp\\\\?", "reason": "Windows temp", "conf": "hi"}],
+    "red":   [{"pat": "(?i)\\\\Windows\\\\", "reason": "System files", "conf": "hi"}],
+    "known_apps": {"docker": ["yellow", "Docker data"]}
   }
 }
 ```
-
----
-
-## 跨平台支持
-
-| 平台 | 状态 | 说明 |
-|------|------|------|
-| Windows 10/11 | ✅ 完整 | 主要目标平台，所有功能可用 |
-| macOS | ⚠️ 部分 | PlatformPaths 已定义，未充分测试 |
-| Linux | ⚠️ 部分 | 基本路径已定义，未充分测试 |
 
 ---
 
@@ -365,7 +449,7 @@ python -m pytest tests/ -v
 
 ```
 storage-analyzer/
-├── v8/                          # 核心模块（18 个文件）
+├── v8/                          # 核心模块（19 个文件）
 │   ├── __init__.py              # 模块导出
 │   ├── types.py                 # Pydantic v2 数据契约
 │   ├── ai_brain.py              # AI 意图解析 + 3 层认知标签
@@ -385,6 +469,9 @@ storage-analyzer/
 │   ├── safety_guard.py          # 安全机制（与 safeguard.py 重叠）
 │   ├── safe_cleanup.py          # 安全清理（已接入 SafeDeleter）
 │   └── cleanup_reporter.py      # 清理报告生成
+├── integrations/                # AI 平台集成
+│   ├── metaskill/               #   Claude Code / Metaskill
+│   └── opensquilla/             #   OpenSquilla（子进程模式）
 ├── tests/
 │   └── test_v8.py               # 75 个测试用例
 ├── config.json                  # 规则 + 受保护路径
@@ -401,11 +488,11 @@ storage-analyzer/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 8.1.0 | 2026-06-04 | 当前版本：Pydantic v2 契约，40+ 指纹规则，审计链 |
+| 8.1.0 | 2026-06-04 | 当前版本：Pydantic v2 契约，40+ 指纹规则，审计链，Metaskill/OpenSquilla 集成 |
 | 7.1 | — | 插件管线，默认启用 |
 | 6 | — | 修复 --execute 非功能性 bug |
 | 5 | — | 初始版本 |
 
 ---
 
-*本文件遵循 [Anthropic Skill Spec](https://docs.anthropic.com/claude-code/skills) 规范，同时兼容 Cursor Rules、Continue Config、OpenAI Codex Instructions。*
+*本文件遵循 [Anthropic Skill Spec](https://docs.anthropic.com/claude-code/skills) 规范，兼容 Claude Code、Cursor Rules、Continue Config、OpenSquilla、OpenAI Codex Instructions 等所有支持 SKILL.md 的 AI Agent 平台。*
