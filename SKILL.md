@@ -151,6 +151,7 @@ python run.py --deep --json > scan.json
 - IF 总大小 > 10GB THEN 额外警告："将删除 XX GB 数据，此操作不可逆"
 - IF 包含 HIGH 风险项（`risk: "high"`）THEN 用红色警告并等待确认
 - IF 用户犹豫 THEN 提示可以先只清理 SAFE 项（`risk: "none"`）
+- IF 用户长时间未响应 THEN 保持等待，不自动执行（宁可不删也不误删）
 
 ---
 
@@ -321,7 +322,7 @@ AI Brain 用三层机制给每个目录打标签：
 
 ---
 
-## 指纹规则覆盖（60 条）
+## 指纹规则覆盖（58 条）
 
 ### 安全删除（RiskLevel.NONE）
 npm-cache, pip-cache, cargo-registry, gradle-caches, maven-repo, nuget-packages, playwright, yarn-cache, pnpm-store, bun-cache, uv-cache, __pycache__, .next, Chrome/Edge/Brave Cache, CrashDumps, Windows Temp, WER Report, Discord Cache, Slack Cache, Steam shader/html cache, OneDrive Cache
@@ -332,7 +333,7 @@ JetBrains/VS/Android Studio 缓存, node_modules, Rust 构建产物, Windows 更
 ### 必须询问用户（RiskLevel.HIGH）
 Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数据, VMware 虚拟机, WSL 磁盘, Docker 数据, Steam/Epic 游戏, OneDrive 同步数据
 
-完整规则定义：`v8/ai_brain.py` 的 `_FINGERPRINTS` 列表（60 条）
+完整规则定义：`v8/ai_brain.py` 的 `_FINGERPRINTS` 列表（58 条）
 
 ---
 
@@ -385,10 +386,12 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 
 ### ❌ 反模式 3：绕过安全层
 ```
-❌ 错误：safe_cleanup.delete_approved_items(items)  # 绕过 v8 安全层
+❌ 错误：safe_cleanup.delete_approved_items(items)
+   → 为什么错：绕过 ProtectedPaths 检查，可能删除系统文件
 ✅ 正确：from v8.safeguard import SafeDeleter
          deleter = SafeDeleter()
          deleter.delete_entry(entry, DeletionMode.DRY_RUN)
+   → 为什么对：SafeDeleter 内置 ProtectedPaths 检查 + 审计日志
 ```
 
 ### ❌ 反模式 4：误报清理完成
@@ -399,21 +402,25 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 
 ### ❌ 反模式 5：直接改注册表
 ```
-❌ 错误：MemoryOptimizer.optimize_windows_settings()  # 直接改注册表，无法回滚
+❌ 错误：MemoryOptimizer.optimize_windows_settings()
+   → 为什么错：注册表修改无法回滚，可能导致系统不稳定
 ✅ 正确：传 dry_run=True，让用户确认后再执行
 ```
 
 ### ❌ 反模式 6：强杀进程
 ```
-❌ 错误：PerformanceOptimizer._stop_app("chrome.exe")  # taskkill /f
+❌ 错误：PerformanceOptimizer._stop_app("chrome.exe")
+   → 为什么错：taskkill /f 会丢失未保存数据，可能导致数据损坏
 ✅ 正确：提示用户手动关闭应用
 ```
 
 ### ❌ 反模式 7：信任字符串匹配
 ```
-❌ 错误：safety_guard.is_protected(path)  # 字符串匹配不可靠
+❌ 错误：safety_guard.is_protected(path)
+   → 为什么错：字符串匹配不解析符号链接，攻击者可通过 symlink 绕过保护
 ✅ 正确：from v8.safeguard import ProtectedPaths
-         ProtectedPaths().is_protected(path)  # realpath + 大小写归一化
+         ProtectedPaths().is_protected(path)
+   → 为什么对：os.path.realpath() 解析符号链接 + 大小写归一化
 ```
 
 ### ❌ 反模式 8：包含小文件噪音
@@ -487,11 +494,45 @@ python -m pytest tests/test_v8.py -v
 python -m pytest tests/ -v
 ```
 
+测试输出示例（实际运行结果）：
+```
+tests/test_v8.py::test_scan_config_creation PASSED
+tests/test_v8.py::test_human_bytes PASSED
+tests/test_v8.py::test_protected_paths_blocks_system_dirs PASSED
+tests/test_v8.py::test_protected_posix SKIPPED (Windows 不适用)
+tests/test_v8.py::test_safe_deleter_recycle_small_file PASSED
+tests/test_v8.py::test_safe_deleter_quarantine_large_file PASSED
+tests/test_v8.py::test_safe_deleter_wipe_requires_hard_mode PASSED
+tests/test_v8.py::test_protected_paths_symlink_resolution SKIPPED (需管理员权限)
+...
+=================== 73 passed, 2 skipped in 1.05s ===================
+```
+
 测试覆盖：types, ai_brain, safeguard, evolution, platform_paths, scan_cache, audit, duplicates, history, orchestrator, scanner_v3, cleanup_engine, memory_optimizer, performance_optimizer, iterative_scanner
 
 **跳过的测试**：POSIX 路径测试（Windows 不适用）、符号链接测试（需管理员权限）
 
 **未覆盖**：DISM 集成、回收站 SHFileOperation（需 Windows API mock）
+
+---
+
+## 数据流
+
+```
+run.py
+  └→ engine.main.run()
+       ├→ Orchestrator.run(cfg, user_decision)
+       │    ├→ AIBrain.parse_intent(query) → ScanConfig
+       │    ├→ FunnelScanner(cfg).scan() → summaries
+       │    ├→ cleaners/ (plugin pipeline) → CleanEntry[]
+       │    ├→ AIBrain.label_all(entries) → cognitive labels
+       │    ├→ ProtectedPaths.is_protected() → hard block check
+       │    ├→ user_decision(entry) → approve/skip/whitelist
+       │    ├→ SafeDeleter.delete_entry(entry, mode) → actual delete
+       │    ├→ AuditLogger.log(entry, result) → audit.jsonl
+       │    └→ HistoryStore.record(snapshot) → trend tracking
+       └→ CleanupReporter.generate(result) → HTML/text report
+```
 
 ---
 
@@ -502,7 +543,7 @@ storage-analyzer/
 ├── v8/                          # 核心模块（19 个文件）
 │   ├── __init__.py              # 模块导出
 │   ├── types.py                 # Pydantic v2 数据契约
-│   ├── ai_brain.py              # AI 意图解析 + 3 层认知标签（60 条指纹规则）
+│   ├── ai_brain.py              # AI 意图解析 + 3 层认知标签（58 条指纹规则）
 │   ├── engine_core.py           # 漏斗扫描器 + 插件注册
 │   ├── evolution.py             # 防呆提案 + 白名单健康检查
 │   ├── safeguard.py             # 安全删除（ProtectedPaths + SafeDeleter）
@@ -573,7 +614,7 @@ storage-analyzer/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 8.1.0 | 2026-06-04 | 当前版本：Pydantic v2 契约，56 条指纹规则，审计链，安全层统一 |
+| 8.1.0 | 2026-06-04 | 当前版本：Pydantic v2 契约，58 条指纹规则，审计链，安全层统一 |
 | 7.1 | — | 插件管线，默认启用 |
 | 6 | — | 修复 --execute 非功能性 bug |
 | 5 | — | 初始版本 |
