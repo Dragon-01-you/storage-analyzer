@@ -571,76 +571,26 @@ run.py
 
 ---
 
-## 文件结构
+## 文件结构（精简版）
 
 ```
 storage-analyzer/
-├── v8/                          # 核心模块（19 个文件）
-│   ├── __init__.py              # 模块导出
-│   ├── types.py                 # Pydantic v2 数据契约
-│   ├── ai_brain.py              # AI 意图解析 + 3 层认知标签（58 条指纹规则）
-│   ├── engine_core.py           # 漏斗扫描器 + 插件注册
-│   ├── evolution.py             # 防呆提案 + 白名单健康检查
-│   ├── safeguard.py             # 安全删除（ProtectedPaths + SafeDeleter）
-│   ├── orchestrator.py          # 全模块编排
-│   ├── platform_paths.py        # 跨平台路径解析
-│   ├── scan_cache.py            # SQLite 增量缓存
-│   ├── audit.py                 # JSON Lines 审计日志链（SHA-256）
-│   ├── duplicates.py            # 3 阶段重复检测（size→hash→content）
-│   ├── history.py               # 历史趋势 + 线性回归预测
-│   ├── scanner_v3.py            # 深度扫描（插件管线）
-│   ├── iterative_scanner.py     # 迭代扫描
-│   ├── memory_optimizer.py      # 内存优化（dry_run 默认，logging）
-│   ├── performance_optimizer.py # 性能优化（dry_run 默认，logging）
-│   ├── safety_guard.py          # 安全机制（与 safeguard.py 重叠，待合并）
-│   ├── safe_cleanup.py          # 安全清理（已接入 SafeDeleter）
-│   ├── cleanup_reporter.py      # 清理报告生成
-│   └── ISSUES.md                # 模块级问题追踪
-├── engine/                      # 旧版引擎（run.py 实际导入）
-│   ├── __init__.py              # 包初始化
-│   ├── main.py                  # CLI 入口（run.py 调用）
-│   ├── scanner.py               # 扫描器
-│   ├── scanner_v2.py            # v2 扫描器
-│   ├── deleter.py               # 删除器
-│   ├── forecaster.py            # 预测器
-│   ├── utils.py                 # 工具函数
-│   └── classify/                # 分类子系统
-├── cleaners/                    # 插件清理器（10 个模块）
-│   ├── __init__.py              # 清理器注册表
-│   ├── _base.py                 # 基类
-│   ├── _system.py               # 系统清理器（Temp/CBS/WinSxS/Prefetch）
-│   ├── _browsers.py             # 浏览器清理器（Chrome/Edge/Firefox/Brave）
-│   ├── _dev.py                  # 开发工具清理器（npm/pip/cargo/gradle）
-│   ├── _ide.py                  # IDE 清理器（VSCode/JetBrains）
-│   ├── _cloud_chat.py           # 云+聊天清理器（OneDrive/Teams/WeChat）
-│   ├── _extras.py               # 附加清理器
-│   ├── _vmware.py               # VMware 清理器（advisory）
-│   └── _legacy_adapter.py       # 旧版适配器
-├── scripts/                     # 工具脚本（20+）
-│   ├── build_report.py          # 报告生成
-│   ├── compare.py               # 扫描器对比
-│   ├── server.py                # HTTP 服务器
-│   ├── build_zipapp.py          # .pyz 打包
-│   ├── snapshot.py              # 快照工具
-│   └── test.py                  # 旧版测试
-├── tests/
-│   ├── test_v8.py               # v8 测试套件（75 个用例）
-│   └── test_cleaners.py         # 清理器测试
-├── dist/                        # 分发包
-│   ├── storage-analyzer-v8.1.0.pyz
-│   ├── storage-analyzer-v8.1.0.zip
-│   └── storage_analyzer-8.1.0-py3-none-any.whl
-├── assets/                      # HTML 报告模板
-├── config.json                  # 规则 + 受保护路径
-├── __main__.py                  # python -m storage-analyzer 入口
-├── run.py                       # CLI 入口（调用 engine.main.run）
-├── pyproject.toml               # PEP 517 构建配置
-├── SKILL.md                     # 本文件（AI Agent 可执行手册）
-├── README.md                    # 项目说明
-├── DEVELOPING.md                # 开发者指南
-├── ARCHITECTURE.md              # 架构设计文档
-├── install.py                   # 一键安装脚本
-└── storage-analyzer.pyz         # 单文件分发包
+├── v8/                    # 核心模块（类型/扫描/安全/编排/缓存/审计）
+├── engine/                # 旧版引擎（CLI入口）
+├── cleaners/              # 96个插件清理器
+│   ├── _system.py         # 系统清理器
+│   ├── _browsers.py       # 浏览器清理器
+│   ├── _dev.py            # 开发工具清理器
+│   ├── _communication.py  # 聊天应用清理器
+│   ├── _gaming.py         # 游戏平台清理器
+│   ├── _office.py         # 办公软件清理器
+│   ├── _media.py          # 媒体工具清理器
+│   └── _chinese_apps.py   # 中国应用清理器
+├── scripts/               # 工具脚本
+├── tests/                 # 测试套件
+├── run.py                 # CLI 入口
+├── config.json            # 规则配置
+└── SKILL.md               # AI Agent 手册
 ```
 
 ---
