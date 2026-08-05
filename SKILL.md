@@ -1,6 +1,6 @@
 ---
 name: storage-analyzer
-description: "磁盘存储分析与安全清理工具。当用户提到磁盘空间不足、C盘满了、清理缓存、找大文件、删除重复文件、释放空间、磁盘清理、存储分析时触发。跨平台（Windows/macOS/Linux），零外部依赖。63个内置清理器，覆盖主流应用。"
+description: "磁盘存储分析与安全清理工具。96个内置清理器，4层置信度系统，相似文件检测，清理计划，数据迁移。跨平台（Windows/macOS/Linux），零外部依赖。"
 version: 9.0.0
 license: MIT
 language: Python 3.10+
@@ -10,10 +10,10 @@ user-invocable: true
 disable-model-invocation: false
 context: fork
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
-argument-hint: "[path] [--deep] [--dupes] [--report] [--execute]"
+argument-hint: "[path] [--deep] [--dupes] [--report] [--execute] [--confidence] [--similar] [--tui] [--plan] [--migrate]"
 ---
 
-# Storage Analyzer Skill
+# Storage Analyzer Skill v9.0
 
 > **任何 AI 助手读完此文件，即可端到端驱动磁盘清理。**
 
@@ -22,6 +22,16 @@ argument-hint: "[path] [--deep] [--dupes] [--report] [--execute]"
 一个本地磁盘分析+安全清理工具。扫描磁盘→分类文件→用户确认→安全删除。
 
 **核心原则：默认不删任何东西。必须用户确认。**
+
+## 核心特性
+
+- **96个内置清理器** - 覆盖系统/浏览器/开发工具/聊天/游戏/办公/媒体
+- **4层置信度系统** - SAFE/RECOMMENDED/SUGGESTED/ASK
+- **相似文件检测** - 重复文件/损坏文件/错误扩展名
+- **清理计划** - 扫描一次，清理多次
+- **数据迁移** - 分析可迁移目录，生成迁移脚本
+- **交互式TUI** - 终端界面导航和选择
+- **深度研究** - 参考9个顶尖项目优化
 
 ## 自动检测上下文
 
@@ -35,7 +45,7 @@ Storage Analyzer 路径: !`for d in "$(dirname "$0")" "." "$HOME/.claude/skills/
 ## 快速入口
 
 ```bash
-# 分析（不删除，只报告）
+# 基本扫描
 python run.py --deep --json
 
 # 执行删除（需要用户确认）
@@ -47,14 +57,26 @@ python run.py --dupes
 # 生成 HTML 报告
 python run.py --deep --report
 
-# 保存 JSON 到文件（用 shell 重定向）
-python run.py --deep --json > scan.json
+# 4层置信度分析
+python run.py --confidence
 
-# 静默模式（不输出日志）
-python run.py --deep --json --quiet
+# 相似文件检测
+python run.py --similar
 
-# 跳过缓存（强制全量扫描）
-python run.py --deep --json --no-cache
+# 损坏文件检测
+python run.py --corrupted
+
+# 盗版检测
+python run.py --piracy
+
+# 交互式TUI
+python run.py --tui
+
+# 管理清理计划
+python run.py --plan
+
+# 迁移分析
+python run.py --migrate
 ```
 
 ---
