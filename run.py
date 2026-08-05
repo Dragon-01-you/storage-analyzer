@@ -14,6 +14,7 @@ Usage:
   python run.py --tui              # interactive TUI
   python run.py --plan             # manage cleanup plans
   python run.py --migrate          # migration analysis
+  python run.py --friendly         # user-friendly output (通俗易懂版)
 
 This version imports the v7 modular `engine/` package directly.
 The legacy top-level `engine.py` is no longer used.
@@ -82,9 +83,10 @@ def main():
     do_tui = "--tui" in args
     do_plan = "--plan" in args
     do_migrate = "--migrate" in args
+    do_friendly = "--friendly" in args
     engine_args = [a for a in args if a not in ("--report", "--json", "--full", "--deep", "--dupes",
                                                  "--confidence", "--similar", "--corrupted", "--piracy",
-                                                 "--tui", "--plan", "--migrate")]
+                                                 "--tui", "--plan", "--migrate", "--friendly")]
 
     # Build opts dict for engine.main.run()
     opts = {
@@ -122,6 +124,10 @@ def main():
 
     if do_migrate:
         _run_migration_analysis()
+        return
+
+    if do_friendly:
+        _run_friendly_scan()
         return
 
     # Direct import - no stdout-capture trick needed anymore
@@ -346,6 +352,84 @@ def _run_migration_analysis():
                 f.write(script)
             print(f"Migration script saved: {filepath}")
             print("WARNING: Review the script before running!")
+
+
+def _run_friendly_scan():
+    """Run user-friendly scan with drive and mode selection."""
+    from v8.user_friendly_output import format_drive_selector, format_cleanup_mode, format_user_friendly
+
+    # Step 1: 选择磁盘
+    print(format_drive_selector())
+    drive_choice = input().strip()
+
+    drives = {
+        '1': ['C:\\'],
+        '2': ['D:\\'],
+        '3': ['E:\\'],
+        '4': ['C:\\', 'D:\\', 'E:\\'],
+    }
+
+    selected_drives = drives.get(drive_choice, ['C:\\'])
+    print(f"\nSelected: {', '.join(selected_drives)}")
+    print()
+
+    # Step 2: 选择清理方式
+    print(format_cleanup_mode())
+    mode_choice = input().strip()
+
+    modes = {
+        '1': 'safe',      # 只清理安全项
+        '2': 'standard',  # 安全项 + 需要确认的项
+        '3': 'deep',      # 所有项
+        '4': 'custom',    # 自定义
+    }
+
+    selected_mode = modes.get(mode_choice, 'safe')
+    print(f"\nSelected: {selected_mode}")
+    print()
+
+    # Step 3: 扫描
+    print("Scanning... Please wait.")
+    print()
+
+    # 运行扫描
+    from engine.main import run
+    opts = {
+        'execute': False,
+        'quiet': True,
+        'deep': True,
+        'dupes': False,
+        'no_cache': False,
+    }
+    data = run(opts)
+    actions = data.get('actions', [])
+
+    # Step 4: 展示结果（通俗易懂版）
+    print(format_user_friendly(actions))
+
+    # Step 5: 询问是否清理
+    print("=" * 60)
+    print("要执行清理吗？")
+    print("=" * 60)
+    print()
+    print("  [1] 清理所有安全项")
+    print("  [2] 清理选中的项")
+    print("  [3] 不清理，退出")
+    print()
+    print("请选择 (1-3): ")
+
+    clean_choice = input().strip()
+
+    if clean_choice == '1':
+        print("\nCleaning safe items...")
+        opts['execute'] = True
+        data = run(opts)
+        print(f"\nDone! Freed: {data.get('freed_h', '0')}")
+    elif clean_choice == '2':
+        print("\nCustom cleanup not implemented yet.")
+        print("Please use --execute with specific items.")
+    else:
+        print("\nNo cleanup performed.")
 
 
 def _human_bytes(b: int) -> str:
