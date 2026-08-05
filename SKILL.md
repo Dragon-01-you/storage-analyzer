@@ -368,21 +368,21 @@ Firefox 浏览器数据, Chrome/Edge 用户数据, 微信/QQ/Telegram 聊天数�
 
 ---
 
-## 失败模式与回退
+## 失败模式与回退（三段式）
 
-| 场景 | 症状 | 第一修复 | 仍失败则 |
-|------|------|----------|----------|
-| 路径不存在 | OSError / FileNotFoundError | 跳过该路径，记录警告 | 提示用户检查路径拼写 |
-| 权限不足 | PermissionError | 跳过，提示用管理员权限 | 提示关闭占用进程后重试 |
-| 文件被锁定 | WinError 32 | 记录为"被占用" | 建议重启后重试 |
-| 磁盘已满 | 无法写入审计日志 | 输出到 stderr | 不中断流程，继续清理 |
-| Pydantic 版本不兼容 | ImportError / ValidationError | `pip install pydantic>=2.0` | 提示升级 Python 到 3.10+ |
-| psutil 未安装 | ImportError（仅 memory_optimizer） | 跳过内存优化功能 | 安装：`pip install psutil` |
-| 扫描超时 | 默认 30 秒 | 调整 config.json 的 scan.timeout | 缩小扫描范围（减少 --depth） |
-| DISM 失败 | WinSxS 清理报错 | 跳过 | 提示手动运行 DISM /StartComponentCleanup |
-| JSON 输出异常 | ok=false 或格式错误 | 展示原始 stderr | 建议重试或报告 issue |
-| 并发扫描冲突 | SQLite 锁定 | 等待 2 秒后重试，最多 3 次 | 提示关闭其他扫描实例 |
-| 非 Windows 平台 | macOS/Linux 功能受限 | 跳过 Windows 专用清理器 | 仅执行跨平台清理器（browsers/dev） |
+| 触发条件 | 一线修复 | 仍失败则 |
+|----------|----------|----------|
+| 路径不存在 (OSError) | 跳过该路径，记录警告到 stderr | 提示用户检查路径拼写，展示 `ls` 验证 |
+| 权限不足 (PermissionError) | 跳过，提示用管理员权限运行 | 提示关闭占用进程后重试，或用 `--skip-locked` |
+| 文件被锁定 (WinError 32) | 记录为"被占用"，加入延迟重试队列 | 建议重启后重试，或用 `--force-unlock` |
+| 磁盘已满 | 输出到 stderr，不写审计日志 | 提示清理其他位置腾出空间后再试 |
+| Pydantic 版本不兼容 | `pip install pydantic>=2.0` | 提示升级 Python 到 3.10+，展示版本要求 |
+| psutil 未安装 | 跳过内存优化功能，继续其他清理 | 安装：`pip install psutil`，或用 `--no-psutil` |
+| 扫描超时 (>30秒) | 调整 config.json 的 scan.timeout | 缩小扫描范围（减少 --depth），或用 `--fast` |
+| DISM 失败 | 跳过 WinSxS 清理，继续其他项 | 提示手动运行 `DISM /StartComponentCleanup` |
+| JSON 输出异常 (ok=false) | 展示原始 stderr，建议重试 | 缩小扫描范围，或用 `--legacy-scanner` |
+| 并发扫描冲突 (SQLite锁定) | 等待 2 秒后重试，最多 3 次 | 提示关闭其他扫描实例，或用 `--no-cache` |
+| 非 Windows 平台 | 跳过 Windows 专用清理器 | 仅执行跨平台清理器（browsers/dev），提示功能受限 |
 
 ---
 
