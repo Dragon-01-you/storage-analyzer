@@ -327,6 +327,234 @@ class OldInstallersCleaner(Cleaner):
 
 
 # ---------------------------------------------------------------------------
+# Log files cleaner
+# ---------------------------------------------------------------------------
+
+class LogFilesCleaner(Cleaner):
+    name = "log-files"
+    platforms = ("windows", "macos", "linux")
+    risk_level = "none"
+    category = "system"
+    description = "Large log files (.log, .log.old, etc.)"
+
+    def analyze(self, ctx: ScanContext) -> List[Entry]:
+        out = []
+        scan_dirs = []
+        if ctx.is_windows:
+            scan_dirs = [
+                os.path.join(ctx.home, "AppData", "Local"),
+                os.path.join(ctx.home, "AppData", "Roaming"),
+            ]
+        else:
+            scan_dirs = ["/var/log", os.path.join(ctx.home, ".local", "share")]
+
+        for scan_dir in scan_dirs:
+            if not _exists(scan_dir):
+                continue
+            try:
+                for root, dirs, files in os.walk(scan_dir):
+                    depth = root.replace(scan_dir, '').count(os.sep)
+                    if depth > 3:
+                        dirs.clear()
+                        continue
+                    for f in files:
+                        fl = f.lower()
+                        if fl.endswith(('.log', '.log.old', '.log.1', '.log.2', '.log.3')):
+                            fp = os.path.join(root, f)
+                            try:
+                                s = os.path.getsize(fp)
+                                if s > 10 * 1024 * 1024:  # >10MB
+                                    out.append(Entry(
+                                        name=f"Log: {f}",
+                                        path=fp,
+                                        size_kb=s // 1024, size_h=hk(s // 1024),
+                                        reason="Large log file (safe to delete)",
+                                        risk="none", prio=3, cat="system", safe=True,
+                                    ))
+                            except OSError:
+                                pass
+            except OSError:
+                pass
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Old downloads cleaner (>180 days)
+# ---------------------------------------------------------------------------
+
+class OldDownloadsCleaner(Cleaner):
+    name = "old-downloads"
+    platforms = ("windows", "macos", "linux")
+    risk_level = "none"
+    category = "system"
+    description = "Files in Downloads older than 180 days"
+
+    def analyze(self, ctx: ScanContext) -> List[Entry]:
+        import time
+        out = []
+        downloads = os.path.join(ctx.home, "Downloads")
+        if not _exists(downloads):
+            return []
+
+        now = time.time()
+        threshold = now - (180 * 24 * 3600)  # 180 days
+
+        try:
+            for f in os.listdir(downloads):
+                fp = os.path.join(downloads, f)
+                if not os.path.isfile(fp):
+                    continue
+                try:
+                    st = os.stat(fp)
+                    if st.st_mtime < threshold and st.st_size > 50 * 1024 * 1024:  # >50MB
+                        out.append(Entry(
+                            name=f"Old: {f}",
+                            path=fp,
+                            size_kb=st.st_size // 1024,
+                            size_h=hk(st.st_size // 1024),
+                            reason=f"File older than 180 days in Downloads",
+                            risk="none", prio=3, cat="system", safe=True,
+                        ))
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Windows Update cleanup
+# ---------------------------------------------------------------------------
+
+class WindowsUpdateCleanup(Cleaner):
+    name = "windows-update-cleanup"
+    platforms = ("windows",)
+    risk_level = "none"
+    category = "system"
+    description = "Windows Update downloaded files"
+    requires_privilege = True
+
+    def analyze(self, ctx: ScanContext) -> List[Entry]:
+        if not ctx.is_windows:
+            return []
+        out = []
+        # SoftwareDistribution/Download
+        wu_download = os.path.join(ctx.system_root, "SoftwareDistribution", "Download")
+        if _exists(wu_download) and os.path.isdir(wu_download):
+            s = _fast_szd(wu_download, 5)
+            if s > 500 * 1024 * 1024:  # >500MB
+                out.append(Entry(
+                    name="Windows Update Downloads",
+                    path=wu_download,
+                    size_kb=s // 1024, size_h=hk(s // 1024),
+                    reason="Windows Update downloaded files (safe after install)",
+                    risk="none", prio=2, cat="system", safe=True,
+                    needs_privilege=True,
+                ))
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Installer residuals
+# ---------------------------------------------------------------------------
+
+class InstallerResidualsCleaner(Cleaner):
+    name = "installer-residuals"
+    platforms = ("windows",)
+    risk_level = "none"
+    category = "system"
+    description = "Leftover installer files (setup_*.exe, install_*.exe)"
+
+    def analyze(self, ctx: ScanContext) -> List[Entry]:
+        if not ctx.is_windows:
+            return []
+        out = []
+        scan_dirs = [
+            os.path.join(ctx.home, "Downloads"),
+            os.path.join(ctx.home, "Desktop"),
+            ctx.home,
+        ]
+        for scan_dir in scan_dirs:
+            if not _exists(scan_dir):
+                continue
+            try:
+                for f in os.listdir(scan_dir):
+                    fl = f.lower()
+                    if (fl.startswith('setup_') or fl.startswith('install_') or
+                            fl.startswith('installer_') or fl.endswith('_setup.exe') or
+                            fl.endswith('_installer.exe')):
+                        fp = os.path.join(scan_dir, f)
+                        if os.path.isfile(fp):
+                            try:
+                                s = os.path.getsize(fp)
+                                if s > 50 * 1024 * 1024:  # >50MB
+                                    out.append(Entry(
+                                        name=f"Installer: {f}",
+                                        path=fp,
+                                        size_kb=s // 1024, size_h=hk(s // 1024),
+                                        reason="Leftover installer file",
+                                        risk="none", prio=3, cat="system", safe=True,
+                                    ))
+                            except OSError:
+                                pass
+            except OSError:
+                pass
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Crash dump files
+# ---------------------------------------------------------------------------
+
+class CrashDumpCleaner(Cleaner):
+    name = "crash-dumps-deep"
+    platforms = ("windows", "macos", "linux")
+    risk_level = "none"
+    category = "system"
+    description = "Crash dump files (.dmp, .core, .crash)"
+
+    def analyze(self, ctx: ScanContext) -> List[Entry]:
+        out = []
+        scan_dirs = [ctx.home]
+        if ctx.is_windows:
+            scan_dirs.extend([
+                os.path.join(ctx.home, "AppData", "Local", "CrashDumps"),
+                os.path.join(ctx.system_root, "Minidump"),
+            ])
+        else:
+            scan_dirs.extend(["/var/crash", "/tmp"])
+
+        for scan_dir in scan_dirs:
+            if not _exists(scan_dir):
+                continue
+            try:
+                for root, dirs, files in os.walk(scan_dir):
+                    depth = root.replace(scan_dir, '').count(os.sep)
+                    if depth > 2:
+                        dirs.clear()
+                        continue
+                    for f in files:
+                        fl = f.lower()
+                        if fl.endswith(('.dmp', '.core', '.crash', '.mdmp', '.hdmp')):
+                            fp = os.path.join(root, f)
+                            try:
+                                s = os.path.getsize(fp)
+                                if s > 10 * 1024 * 1024:  # >10MB
+                                    out.append(Entry(
+                                        name=f"Crash dump: {f}",
+                                        path=fp,
+                                        size_kb=s // 1024, size_h=hk(s // 1024),
+                                        reason="Crash dump file (safe to delete)",
+                                        risk="none", prio=2, cat="system", safe=True,
+                                    ))
+                            except OSError:
+                                pass
+            except OSError:
+                pass
+        return out
+
+
+# ---------------------------------------------------------------------------
 # Export
 # ---------------------------------------------------------------------------
 
@@ -338,4 +566,9 @@ DEEP_SCAN_CLEANERS = [
     VenvCleaner,
     PycacheCleaner,
     OldInstallersCleaner,
+    LogFilesCleaner,
+    OldDownloadsCleaner,
+    WindowsUpdateCleanup,
+    InstallerResidualsCleaner,
+    CrashDumpCleaner,
 ]
