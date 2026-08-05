@@ -11,6 +11,9 @@ Usage:
   python run.py --similar          # find similar/duplicate files
   python run.py --corrupted        # detect corrupted files
   python run.py --piracy           # detect piracy-related files
+  python run.py --tui              # interactive TUI
+  python run.py --plan             # manage cleanup plans
+  python run.py --migrate          # migration analysis
 
 This version imports the v7 modular `engine/` package directly.
 The legacy top-level `engine.py` is no longer used.
@@ -76,8 +79,12 @@ def main():
     do_similar = "--similar" in args
     do_corrupted = "--corrupted" in args
     do_piracy = "--piracy" in args
+    do_tui = "--tui" in args
+    do_plan = "--plan" in args
+    do_migrate = "--migrate" in args
     engine_args = [a for a in args if a not in ("--report", "--json", "--full", "--deep", "--dupes",
-                                                 "--confidence", "--similar", "--corrupted", "--piracy")]
+                                                 "--confidence", "--similar", "--corrupted", "--piracy",
+                                                 "--tui", "--plan", "--migrate")]
 
     # Build opts dict for engine.main.run()
     opts = {
@@ -103,6 +110,18 @@ def main():
 
     if do_piracy:
         _run_piracy_detection()
+        return
+
+    if do_tui:
+        _run_tui()
+        return
+
+    if do_plan:
+        _run_plan_management()
+        return
+
+    if do_migrate:
+        _run_migration_analysis()
         return
 
     # Direct import - no stdout-capture trick needed anymore
@@ -255,6 +274,78 @@ def _run_piracy_detection():
     for p in piracy_files:
         print(f"  {p.path}")
         print(f"    {p.reason}")
+
+
+def _run_tui():
+    """Run interactive TUI."""
+    from v8.interactive_tui import run_tui
+    run_tui()
+
+
+def _run_plan_management():
+    """Run plan management."""
+    from v8.cleanup_plan import PlanManager
+
+    manager = PlanManager()
+    plans = manager.list_plans()
+
+    if not plans:
+        print("No saved plans found.")
+        print("Run a scan first to create a plan.")
+        return
+
+    print("=== Saved Plans ===\n")
+    for i, plan in enumerate(plans):
+        print(f"  [{i}] {plan['plan_id']} - {plan['item_count']} items ({_human_bytes(plan['total_bytes'])})")
+        print(f"      Created: {plan['created_at']}")
+
+    print("\nOptions:")
+    print("  [0-9] View plan details")
+    print("  [d] Delete plan")
+    print("  [q] Quit")
+
+    choice = input("\nSelect: ").strip().lower()
+
+    if choice.isdigit():
+        idx = int(choice)
+        if 0 <= idx < len(plans):
+            plan = manager.load_plan(plans[idx]['plan_id'])
+            if plan:
+                print("\n" + manager.get_plan_summary(plan))
+                input("\nPress Enter to continue...")
+
+
+def _run_migration_analysis():
+    """Run migration analysis."""
+    from v8.cleanup_plan import MigrationPlanner
+
+    planner = MigrationPlanner()
+
+    print("=== Migration Analysis ===\n")
+    print("Analyzing what can be migrated from C: to D:...\n")
+
+    results = planner.analyze_migration('C:', 'D:')
+
+    print(f"Found {len(results['migratable'])} directories to migrate")
+    print(f"Total size: {_human_bytes(results['total_bytes'])}")
+    print()
+
+    for item in results['migratable']:
+        print(f"  {item['name']}: {_human_bytes(item['size_bytes'])}")
+        print(f"    {item['description']}")
+        print(f"    From: {item['path']}")
+        print(f"    To:   {item['target']}")
+        print()
+
+    if results['migratable']:
+        save = input("Save migration script? (y/n): ").strip().lower()
+        if save == 'y':
+            script = planner.create_migration_plan(results['migratable'])
+            filepath = os.path.join(os.path.expanduser('~'), 'migration_plan.bat')
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(script)
+            print(f"Migration script saved: {filepath}")
+            print("WARNING: Review the script before running!")
 
 
 def _human_bytes(b: int) -> str:
