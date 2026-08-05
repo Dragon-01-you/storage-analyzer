@@ -39,6 +39,7 @@ from ._deep_scan import DEEP_SCAN_CLEANERS
 from ._windows_integration import WINDOWS_INTEGRATION_CLEANERS
 from ._downloads_analyzer import DOWNLOADS_CLEANERS
 from ._media import MEDIA_CLEANERS
+from ._chinese_apps import CHINESE_APP_CLEANERS
 
 
 # ---------------------------------------------------------------------------
@@ -63,12 +64,13 @@ REGISTRY: List[type] = [
     *DEV_CLEANERS_EXTRA_NEW,      # 7: Java/Python/Vim/TortoiseSVN/Git/Ruby/Go
     *OFFICE_CLEANERS,             # 4: Office/LibreOffice/Thunderbird/Outlook
     *GAMING_CLEANERS,             # 4: Epic/GOG/EA/Ubisoft
-    *DEEP_SCAN_CLEANERS,          # 7: .bak/.DS_Store/Thumbs.db/node_modules/venv/__pycache__/installers
+    *DEEP_SCAN_CLEANERS,          # 12: .bak/.DS_Store/Thumbs.db/node_modules/venv/__pycache__/installers/logs/crash
     *WINDOWS_INTEGRATION_CLEANERS,# 7: Recent/Windows.old/Delivery/Defender/WER/Font/Icon
     *DOWNLOADS_CLEANERS,          # 3: Downloads analyzer/Temp/Recycle Bin
     *MEDIA_CLEANERS,              # 6: VLC/Spotify/Adobe/WinRAR/7-Zip/Everything
+    *CHINESE_APP_CLEANERS,        # 11: Baidu/Aliwangwang/360/QQ/Sogou/TencentVideo/iQiyi/Youku/Bilibili/NetEase/Kuwo
 ]
-# Total: 63 built-in cleaners (was 24).
+# Total: 96 built-in cleaners (was 24).
 
 
 # ---------------------------------------------------------------------------
