@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-"""Storage Analyzer - Direct entry point (no subprocess overhead).
+"""Storage Analyzer v9.0 - Direct entry point (no subprocess overhead).
 
 Usage:
   python run.py                    # dry-run analysis + summary
@@ -7,6 +7,10 @@ Usage:
   python run.py --execute          # actually clean
   python run.py --full             # everything
   python run.py --report           # generate HTML report
+  python run.py --confidence       # 4-tier confidence analysis
+  python run.py --similar          # find similar/duplicate files
+  python run.py --corrupted        # detect corrupted files
+  python run.py --piracy           # detect piracy-related files
 
 This version imports the v7 modular `engine/` package directly.
 The legacy top-level `engine.py` is no longer used.
@@ -68,7 +72,12 @@ def main():
     args = sys.argv[1:]
     do_report = "--report" in args
     do_json = "--json" in args
-    engine_args = [a for a in args if a not in ("--report", "--json", "--full", "--deep", "--dupes")]
+    do_confidence = "--confidence" in args
+    do_similar = "--similar" in args
+    do_corrupted = "--corrupted" in args
+    do_piracy = "--piracy" in args
+    engine_args = [a for a in args if a not in ("--report", "--json", "--full", "--deep", "--dupes",
+                                                 "--confidence", "--similar", "--corrupted", "--piracy")]
 
     # Build opts dict for engine.main.run()
     opts = {
@@ -78,6 +87,23 @@ def main():
         "dupes": any(x in args for x in ("--dupes", "--full")),
         "no_cache": "--no-cache" in args,
     }
+
+    # Handle new features
+    if do_confidence:
+        _run_confidence_analysis()
+        return
+
+    if do_similar:
+        _run_similar_analysis()
+        return
+
+    if do_corrupted:
+        _run_corrupted_detection()
+        return
+
+    if do_piracy:
+        _run_piracy_detection()
+        return
 
     # Direct import - no stdout-capture trick needed anymore
     from engine.main import run
@@ -98,6 +124,149 @@ def main():
         print(json.dumps(data, ensure_ascii=False, indent=2))
     else:
         print(_summary(data))
+
+
+def _run_confidence_analysis():
+    """Run 4-tier confidence analysis."""
+    from v8.confidence_tiers import ConfidenceAnalyzer
+    import json
+
+    analyzer = ConfidenceAnalyzer()
+    home = os.path.expanduser("~")
+
+    print("=== 4-Tier Confidence Analysis ===")
+    print(f"Scanning: {home}")
+    print()
+
+    # Analyze Downloads directory
+    downloads = os.path.join(home, "Downloads")
+    if os.path.exists(downloads):
+        entries = analyzer.analyze_directory(downloads)
+        summary = analyzer.get_summary(entries)
+
+        print(f"Downloads: {len(entries)} files")
+        print(f"  [SAFE]       {summary['tiers']['safe']['count']:>5} files  {_human_bytes(summary['tiers']['safe']['bytes'])}")
+        print(f"  [REC]        {summary['tiers']['recommended']['count']:>5} files  {_human_bytes(summary['tiers']['recommended']['bytes'])}")
+        print(f"  [SUG]        {summary['tiers']['suggested']['count']:>5} files  {_human_bytes(summary['tiers']['suggested']['bytes'])}")
+        print(f"  [ASK]        {summary['tiers']['ask']['count']:>5} files  {_human_bytes(summary['tiers']['ask']['bytes'])}")
+        print()
+
+        # Show top items
+        print("Top 10 largest:")
+        entries.sort(key=lambda e: e.size_bytes, reverse=True)
+        for e in entries[:10]:
+            print(f"  {e.tier_emoji} {e.size_human:>10}  {e.name}")
+    else:
+        print("Downloads directory not found")
+
+
+def _run_similar_analysis():
+    """Run similar file analysis."""
+    from v8.similar_files import SimilarFileAnalyzer
+    import json
+
+    analyzer = SimilarFileAnalyzer(min_size_mb=1)
+    home = os.path.expanduser("~")
+    paths = [
+        os.path.join(home, "Downloads"),
+        os.path.join(home, "Documents"),
+    ]
+
+    print("=== Similar File Analysis ===")
+    print(f"Scanning: {', '.join(paths)}")
+    print()
+
+    results = analyzer.analyze(paths)
+    summary = results['summary']
+
+    print(f"Duplicates: {summary['duplicate_groups']} groups, {summary['duplicate_files']} files")
+    print(f"  Wasted space: {_human_bytes(summary['duplicate_wasted'])}")
+    print(f"Corrupted: {summary['corrupted_files']} files")
+    print(f"Wrong extensions: {summary['wrong_extensions']} files")
+    print()
+
+    # Show top duplicates
+    if results['duplicates']:
+        print("Top 5 duplicate groups:")
+        for group in results['duplicates'][:5]:
+            print(f"  {group.count} copies, {_human_bytes(group.wasted_bytes)} wasted")
+            for f in group.files[:3]:
+                print(f"    {f}")
+            if group.count > 3:
+                print(f"    ... +{group.count - 3} more")
+
+
+def _run_corrupted_detection():
+    """Run corrupted file detection."""
+    from v8.similar_files import CorruptedFileDetector
+
+    detector = CorruptedFileDetector()
+    home = os.path.expanduser("~")
+    paths = [
+        os.path.join(home, "Downloads"),
+        os.path.join(home, "Documents"),
+    ]
+
+    print("=== Corrupted File Detection ===")
+    print(f"Scanning: {', '.join(paths)}")
+    print()
+
+    corrupted = detector.detect(paths)
+    print(f"Found {len(corrupted)} corrupted files")
+    print()
+
+    for c in corrupted[:20]:
+        print(f"  {c.path}")
+        print(f"    Reason: {c.reason}")
+
+
+def _run_piracy_detection():
+    """Run piracy detection."""
+    from v8.confidence_tiers import PiracyDetector
+
+    detector = PiracyDetector()
+    home = os.path.expanduser("~")
+    paths = [
+        os.path.join(home, "Downloads"),
+        os.path.join(home, "Desktop"),
+    ]
+
+    print("=== Piracy Detection ===")
+    print(f"Scanning: {', '.join(paths)}")
+    print()
+
+    piracy_files = []
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            for root, dirs, files in os.walk(path):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    result = detector.detect(fp)
+                    if result:
+                        piracy_files.append(result)
+        except OSError:
+            continue
+
+    print(f"Found {len(piracy_files)} potential piracy files")
+    print()
+
+    for p in piracy_files:
+        print(f"  {p.path}")
+        print(f"    {p.reason}")
+
+
+def _human_bytes(b: int) -> str:
+    """Convert bytes to human-readable string."""
+    if b == 0:
+        return "0B"
+    n = float(b)
+    for u in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or u == "TB":
+            return f"{n:.0f}{u}" if n < 100 else f"{n:.1f}{u}"
+        n /= 1024
+    return f"{n:.1f}PB"
 
 
 if __name__ == "__main__":
