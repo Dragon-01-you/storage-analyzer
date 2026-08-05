@@ -1,7 +1,7 @@
 ---
 name: storage-analyzer
-description: "磁盘存储分析与安全清理工具。当用户提到磁盘空间不足、C盘满了、清理缓存、找大文件、删除重复文件、释放空间、磁盘清理、存储分析时触发。跨平台（Windows/macOS/Linux），零外部依赖。"
-version: 8.1.0
+description: "磁盘存储分析与安全清理工具。当用户提到磁盘空间不足、C盘满了、清理缓存、找大文件、删除重复文件、释放空间、磁盘清理、存储分析时触发。跨平台（Windows/macOS/Linux），零外部依赖。63个内置清理器，覆盖主流应用。"
+version: 9.0.0
 license: MIT
 language: Python 3.10+
 dependencies: pydantic>=2.0, psutil (optional)

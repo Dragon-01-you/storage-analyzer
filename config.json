@@ -1,5 +1,5 @@
 {
-  "_comment": "Storage Analyzer config v5 - rules + protected paths",
+  "_comment": "Storage Analyzer config v9.0 - rules + protected paths",
   "scan": {
     "timeout": 30,
     "max_depth": 4,
@@ -67,6 +67,96 @@
         "pat": "(?i)\\.log\\.\\d+",
         "reason": "Rotated log",
         "conf": "med"
+      },
+      {
+        "pat": "(?i)\\\\(Discord|discordptb|discordcanary)\\\\.*(Cache|Code Cache|GPUCache)",
+        "reason": "Discord cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\Slack\\\\.*(Cache|Code Cache|GPUCache)",
+        "reason": "Slack cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\Telegram Desktop\\\\tdata\\\\(cache|tdummy)",
+        "reason": "Telegram cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(opera|vivaldi|chromium|librewolf|waterfox)\\\\.*Cache",
+        "reason": "Browser cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(EpicGamesLauncher|GOG.com|Electronic Arts|Ubisoft)\\\\.*cache",
+        "reason": "Game launcher cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(VLC|Spotify|Adobe|WinRAR|7-Zip)\\\\.*(cache|temp)",
+        "reason": "App cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(DeliveryOptimization|Prefetch|SoftwareDistribution)",
+        "reason": "Windows system cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(Defender|Windows Defender)\\\\.*History",
+        "reason": "Defender history",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(FontCache|iconcache|thumbcache)",
+        "reason": "System cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\__pycache__",
+        "reason": "Python bytecode cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\node_modules",
+        "reason": "Node.js dependencies",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\\\.venv\\\\",
+        "reason": "Python virtual environment",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(\\.bak|\\.orig|\\.tmp|~)$",
+        "reason": "Backup/temp file",
+        "conf": "med"
+      },
+      {
+        "pat": "(?i)\\\\Thumbs\\.db",
+        "reason": "Windows thumbnail cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\\\.DS_Store",
+        "reason": "macOS metadata",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(go-build|go\\\\pkg\\\\mod)",
+        "reason": "Go build/module cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(\\.gem\\\\cache|ruby)",
+        "reason": "Ruby gems cache",
+        "conf": "hi"
+      },
+      {
+        "pat": "(?i)\\\\(Java|jdk|jre).*(cache|deployment)",
+        "reason": "Java cache",
+        "conf": "hi"
       }
     ],
     "red": [
@@ -92,38 +182,44 @@
       }
     ],
     "known_apps": {
-      "vmwarekail": [
-        "yellow",
-        "VMware Kali VM"
-      ],
-      "kali": [
-        "yellow",
-        "Kali Linux"
-      ],
-      "ubuntu": [
-        "yellow",
-        "Ubuntu VM"
-      ],
-      "node_modules": [
-        "green",
-        "Node deps cache"
-      ],
-      "steam": [
-        "yellow",
-        "Steam games"
-      ],
-      "docker": [
-        "yellow",
-        "Docker data"
-      ],
-      "wsl": [
-        "yellow",
-        "WSL data"
-      ],
-      "eve-ng": [
-        "yellow",
-        "EVE-NG simulator"
-      ]
+      "vmwarekail": ["yellow", "VMware Kali VM"],
+      "kali": ["yellow", "Kali Linux"],
+      "ubuntu": ["yellow", "Ubuntu VM"],
+      "node_modules": ["green", "Node deps cache"],
+      "steam": ["yellow", "Steam games"],
+      "docker": ["yellow", "Docker data"],
+      "wsl": ["yellow", "WSL data"],
+      "eve-ng": ["yellow", "EVE-NG simulator"],
+      "discord": ["green", "Discord cache"],
+      "slack": ["green", "Slack cache"],
+      "telegram": ["green", "Telegram cache"],
+      "zoom": ["green", "Zoom cache"],
+      "skype": ["green", "Skype cache"],
+      "opera": ["green", "Opera cache"],
+      "vivaldi": ["green", "Vivaldi cache"],
+      "chromium": ["green", "Chromium cache"],
+      "librewolf": ["green", "LibreWolf cache"],
+      "waterfox": ["green", "Waterfox cache"],
+      "epicgames": ["yellow", "Epic Games data"],
+      "gog": ["yellow", "GOG Galaxy data"],
+      "ea": ["yellow", "EA App data"],
+      "ubisoft": ["yellow", "Ubisoft Connect data"],
+      "office": ["yellow", "Microsoft Office data"],
+      "libreoffice": ["green", "LibreOffice cache"],
+      "thunderbird": ["yellow", "Thunderbird data"],
+      "outlook": ["yellow", "Outlook data"],
+      "vlc": ["green", "VLC cache"],
+      "spotify": ["green", "Spotify cache"],
+      "adobe": ["yellow", "Adobe data"],
+      "winrar": ["green", "WinRAR temp"],
+      "7zip": ["green", "7-Zip temp"],
+      "everything": ["green", "Everything search index"],
+      "java": ["green", "Java cache"],
+      "python": ["green", "Python cache"],
+      "vim": ["green", "Vim swap files"],
+      "git": ["green", "Git cache"],
+      "ruby": ["green", "Ruby gems cache"],
+      "go": ["green", "Go build cache"]
     }
   }
 }

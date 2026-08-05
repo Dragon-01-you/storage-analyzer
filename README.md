@@ -1,4 +1,4 @@
-# Storage Analyzer
+# Storage Analyzer v9.0
 
 > 你的电脑是不是越来越慢了？C 盘是不是快满了？别慌，这个工具帮你看看到底什么在占空间。
 
@@ -9,10 +9,12 @@
 不会上来就乱删。默认只是看看，不会动任何文件。你说删哪个才删哪个。
 
 ```
-✅ 30 多种垃圾文件，自动识别
+✅ 63 个内置清理器，覆盖主流应用
 ✅ 默认只扫描不删除，你说删才删
 ✅ 认 Windows、Mac、Linux
 ✅ 零依赖，下载就能用
+✅ 智能下载文件夹分析
+✅ 深度扫描（.bak、node_modules、venv 等）
 ```
 
 ## 30 秒上手
@@ -38,14 +40,20 @@ python run.py --deep --execute
 
 | 类型 | 举几个例子 |
 |------|-----------|
-| 🗑️ 系统垃圾 | Windows 临时文件、崩溃转储、缩略图缓存、Windows.old |
-| 🌐 浏览器 | Chrome/Edge/Firefox/Brave 的缓存（不是书签密码那些重要数据） |
-| 💻 开发工具 | npm/pip/cargo/yarn 缓存、node_modules、Gradle 缓存 |
+| 🗑️ 系统垃圾 | Windows 临时文件、崩溃转储、缩略图缓存、Windows.old、回收站 |
+| 🌐 浏览器 | Chrome/Edge/Firefox/Brave/Opera/Vivaldi/Chromium/LibreWolf/Waterfox/Arc 缓存 |
+| 💻 开发工具 | npm/pip/cargo/yarn/uv/go/ruby/java 缓存、node_modules、venv、__pycache__ |
 | 🖥️ IDE | VSCode/JetBrains 的缓存和日志 |
-| 💬 聊天软件 | 微信/QQ/钉钉/Teams 的缓存文件 |
+| 💬 聊天软件 | 微信/QQ/钉钉/Teams/Discord/Slack/Zoom/Skype/Telegram 缓存 |
 | ☁️ 云盘 | OneDrive 本地缓存 |
-| 🎮 游戏 | Steam 着色器缓存（不是游戏本体） |
+| 🎮 游戏 | Steam/Epic/GOG/EA/Ubisoft 着色器缓存（不是游戏本体） |
 | 🖼️ GPU | NVIDIA/AMD/Intel 着色器缓存 |
+| 📄 办公软件 | Microsoft Office/LibreOffice/Thunderbird/Outlook 缓存 |
+| 🎵 媒体工具 | VLC/Spotify/Adobe Reader 缓存 |
+| 🗜️ 压缩工具 | WinRAR/7-Zip 临时文件 |
+| 🔍 搜索工具 | Everything 搜索索引 |
+| 📁 深度扫描 | .bak 备份文件、.DS_Store、Thumbs.db、旧安装包 |
+| 📥 下载文件夹 | 智能分析：旧文件、重复文件、大文件、安装包 |
 
 **放心：游戏本体、聊天记录、重要文件不会被删。** 只清理缓存和临时文件。
 

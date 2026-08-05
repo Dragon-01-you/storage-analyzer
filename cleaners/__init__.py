@@ -29,6 +29,16 @@ from ._extras import (
     GPU_CLEANERS, DEV_CLEANERS_EXTRA, CHAT_CLEANERS,
     BROWSER_CLEANERS_EXTRA,
 )
+# New cleaners (v9.0)
+from ._communication import COMMUNICATION_CLEANERS
+from ._browsers_extra import BROWSER_CLEANERS_EXTRA_NEW
+from ._dev_extra import DEV_CLEANERS_EXTRA_NEW
+from ._office import OFFICE_CLEANERS
+from ._gaming import GAMING_CLEANERS
+from ._deep_scan import DEEP_SCAN_CLEANERS
+from ._windows_integration import WINDOWS_INTEGRATION_CLEANERS
+from ._downloads_analyzer import DOWNLOADS_CLEANERS
+from ._media import MEDIA_CLEANERS
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +46,7 @@ from ._extras import (
 # ---------------------------------------------------------------------------
 
 REGISTRY: List[type] = [
+    # Original cleaners (v8.1)
     *SYSTEM_CLEANERS,         # 9: dumps, update, prefetch, etc.
     *GPU_CLEANERS,            # 1: GPU cache (NVIDIA/AMD/Intel)
     *BROWSER_CLEANERS,       # 4: Chrome/Edge/Firefox/Brave (cache only)
@@ -46,8 +57,18 @@ REGISTRY: List[type] = [
     *CLOUD_CHAT_CLEANERS,    # 3: OneDrive/Teams/Zoom
     *CHAT_CLEANERS,          # 3: WeChat/Tencent/DingTalk
     VMwareCleaner,           # 1: VMware VM detect + advisory
+    # New cleaners (v9.0)
+    *COMMUNICATION_CLEANERS,      # 5: Discord/Slack/Zoom/Skype/Telegram
+    *BROWSER_CLEANERS_EXTRA_NEW,  # 6: Opera/Vivaldi/Chromium/LibreWolf/Waterfox/Arc
+    *DEV_CLEANERS_EXTRA_NEW,      # 7: Java/Python/Vim/TortoiseSVN/Git/Ruby/Go
+    *OFFICE_CLEANERS,             # 4: Office/LibreOffice/Thunderbird/Outlook
+    *GAMING_CLEANERS,             # 4: Epic/GOG/EA/Ubisoft
+    *DEEP_SCAN_CLEANERS,          # 7: .bak/.DS_Store/Thumbs.db/node_modules/venv/__pycache__/installers
+    *WINDOWS_INTEGRATION_CLEANERS,# 7: Recent/Windows.old/Delivery/Defender/WER/Font/Icon
+    *DOWNLOADS_CLEANERS,          # 3: Downloads analyzer/Temp/Recycle Bin
+    *MEDIA_CLEANERS,              # 6: VLC/Spotify/Adobe/WinRAR/7-Zip/Everything
 ]
-# Total: 24 built-in cleaners. More to come (mail/gaming/macOS specific).
+# Total: 63 built-in cleaners (was 24).
 
 
 # ---------------------------------------------------------------------------
