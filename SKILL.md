@@ -90,6 +90,9 @@ python run.py --similar
 
 # 迁移分析
 python run.py --migrate
+
+# 用户友好输出（通俗易懂版）
+python run.py --friendly
 ```
 
 ### 第三步：查看结果
