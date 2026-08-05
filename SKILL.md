@@ -17,6 +17,30 @@ argument-hint: "[path] [--deep] [--dupes] [--report] [--execute] [--confidence] 
 
 > **任何 AI 助手读完此文件，即可端到端驱动磁盘清理。**
 
+## 快速开始（AI 直接执行）
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/Dragon-01-you/storage-analyzer.git
+cd storage-analyzer
+
+# 2. 运行扫描（不删除，只报告）
+python run.py --deep --json
+
+# 3. 查看可清理项目
+python run.py --confidence
+
+# 4. 执行清理（会先问你确认）
+python run.py --deep --execute
+```
+
+**一行命令下载运行：**
+```bash
+git clone https://github.com/Dragon-01-you/storage-analyzer.git && cd storage-analyzer && python run.py --confidence
+```
+
+---
+
 ## 这是什么
 
 一个本地磁盘分析+安全清理工具。扫描磁盘→分类文件→用户确认→安全删除。
@@ -33,50 +57,73 @@ argument-hint: "[path] [--deep] [--dupes] [--report] [--execute] [--confidence] 
 - **交互式TUI** - 终端界面导航和选择
 - **深度研究** - 参考9个顶尖项目优化
 
-## 自动检测上下文
-
-工作目录: !`pwd`
-Python 版本: !`python --version 2>/dev/null || python3 --version 2>/dev/null || echo "Python not found"`
-平台: !`uname -s 2>/dev/null || echo Windows`
-Storage Analyzer 路径: !`for d in "$(dirname "$0")" "." "$HOME/.claude/skills/storage-analyzer"; do [ -f "$d/run.py" ] && echo "$d" && break; done 2>/dev/null || echo "NOT FOUND"`
-
 ---
 
-## 快速入口
+## 全流程使用指南
+
+### 第一步：下载安装
 
 ```bash
-# 基本扫描
-python run.py --deep --json
+# 方式1：Git 克隆（推荐）
+git clone https://github.com/Dragon-01-you/storage-analyzer.git
+cd storage-analyzer
 
-# 执行删除（需要用户确认）
-python run.py --deep --execute
+# 方式2：下载 ZIP
+# 访问 https://github.com/Dragon-01-you/storage-analyzer/archive/refs/heads/master.zip
+# 解压后进入目录
+```
 
-# 找重复文件
-python run.py --dupes
+### 第二步：扫描分析
 
-# 生成 HTML 报告
-python run.py --deep --report
+```bash
+# 快速扫描（Downloads/Desktop/Temp）
+python run.py
 
-# 4层置信度分析
+# 深度扫描（所有用户目录）
+python run.py --deep
+
+# 4层置信度分析（推荐）
 python run.py --confidence
 
 # 相似文件检测
 python run.py --similar
 
-# 损坏文件检测
-python run.py --corrupted
+# 迁移分析
+python run.py --migrate
+```
 
-# 盗版检测
-python run.py --piracy
+### 第三步：查看结果
 
-# 交互式TUI
+扫描完成后会显示：
+```
+Downloads: 125 files
+  [SAFE]           0 files  0B        ← 可以直接删
+  [REC]            0 files  0B        ← 建议删除
+  [SUG]            7 files  210.9MB   ← 需要确认
+  [ASK]          118 files  102.6MB   ← 只有你知道
+```
+
+### 第四步：执行清理
+
+```bash
+# 清理安全项（推荐）
+python run.py --deep --execute
+
+# 交互式选择
 python run.py --tui
 
 # 管理清理计划
 python run.py --plan
+```
 
-# 迁移分析
+### 第五步：数据迁移（可选）
+
+```bash
+# 分析可迁移数据
 python run.py --migrate
+
+# 生成迁移脚本
+# 会生成 migration_plan.bat，review 后执行
 ```
 
 ---
@@ -84,11 +131,12 @@ python run.py --migrate
 ## AI 工作流程（必须按顺序执行）
 
 ```
-Step 1: 扫描      → python run.py --deep --json > scan.json
-Step 2: 展示      → 把 scan.json 中的 actions[] 展示给用户（用大白话，不用技术路径）
-Step 3: 等待确认  → 用户逐项确认 approve / skip / whitelist
-Step 4: 执行      → python run.py --execute（仅执行用户确认的项）
-Step 5: 汇报      → 展示清理结果和释放空间
+Step 1: 下载      → git clone https://github.com/Dragon-01-you/storage-analyzer.git
+Step 2: 扫描      → python run.py --confidence
+Step 3: 展示      → 用大白话展示可清理项目（不用技术路径）
+Step 4: 等待确认  → 用户逐项确认 approve / skip
+Step 5: 执行      → python run.py --deep --execute
+Step 6: 汇报      → 展示清理结果和释放空间
 ```
 
 **异常分支：**
